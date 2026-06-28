@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, RefreshCw } from 'lucide-react'
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 
 import { getOverview, type ActivityRow, type OverviewRange } from '@/api/demo'
 import { InlineLoader } from '@/components/PageLoader'
@@ -41,6 +41,19 @@ const chartConfig: ChartConfig = {
   cost: { label: '成本', color: 'hsl(var(--chart-2))' },
 }
 
+function formatCompactAxisValue(value: number, prefix = ''): string {
+  if (!Number.isFinite(value)) return '-'
+
+  const abs = Math.abs(value)
+  const compact = (nextValue: number, suffix: string) => `${nextValue.toFixed(1).replace(/\.0$/, '')}${suffix}`
+
+  if (abs >= 1_000_000_000) return `${prefix}${compact(value / 1_000_000_000, 'B')}`
+  if (abs >= 1_000_000) return `${prefix}${compact(value / 1_000_000, 'M')}`
+  if (abs >= 1_000) return `${prefix}${compact(value / 1_000, 'K')}`
+
+  return `${prefix}${Math.round(value).toLocaleString('zh-CN')}`
+}
+
 const STATUS_META: Record<ActivityRow['status'], { label: string; tone: string }> = {
   active: { label: '正常', tone: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' },
   pending: { label: '待处理', tone: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300' },
@@ -64,9 +77,14 @@ export default function Overview() {
   const [activityStatus, setActivityStatus] = useState<ActivityStatusFilter>('all')
   const [activityDateRange, setActivityDateRange] = useState<DateRangeValue>({ from: '', to: '' })
   const [activityPage, setActivityPage] = useState(1)
+  const [isCompactViewport, setIsCompactViewport] = useState(false)
   const { data, loading, error, refresh } = useResource(() => getOverview(range), [range])
 
   const deltaUp = (data?.revenueDelta ?? 0) >= 0
+  const chartMargin = isCompactViewport
+    ? { top: 8, right: 4, left: 8, bottom: 0 }
+    : { top: 8, right: 12, left: -4, bottom: 0 }
+  const compactAxisProps = isCompactViewport ? { width: 44, tick: { fontSize: 10 } } : {}
   const filteredRows = useMemo(() => {
     const keyword = activitySearch.trim().toLocaleLowerCase('zh-CN')
     return (data?.rows ?? []).filter((row) => {
@@ -88,6 +106,15 @@ export default function Overview() {
   useEffect(() => {
     setActivityPage(1)
   }, [activityDateRange.from, activityDateRange.to, activitySearch, activityStatus, range])
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 430px)')
+    const syncViewport = () => setIsCompactViewport(media.matches)
+
+    syncViewport()
+    media.addEventListener('change', syncViewport)
+    return () => media.removeEventListener('change', syncViewport)
+  }, [])
 
   const resetActivityFilters = () => {
     setActivitySearch('')
@@ -158,16 +185,42 @@ export default function Overview() {
           </PageStatStrip>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-            <PageSurface title="营收趋势" bodyClassName="space-y-4">
-              <div className="h-[300px]">
+            <PageSurface title="营收趋势" description="面积折线用于展示连续指标,弱化网格和坐标轴,突出走势与对比。" bodyClassName="space-y-4">
+              <div className="h-[300px] min-w-0">
                 <ChartContainer config={chartConfig} className="h-full w-full">
-                  <LineChart data={data.trend} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="4 4" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} />
-                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `¥${Number(value).toLocaleString('zh-CN')}`} />
+                  <AreaChart accessibilityLayer data={data.trend} margin={chartMargin}>
+                    <defs>
+                      <linearGradient id="overviewRevenueFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--color-revenue)" stopOpacity={0.36} />
+                        <stop offset="95%" stopColor="var(--color-revenue)" stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="overviewCostFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--color-cost)" stopOpacity={0.24} />
+                        <stop offset="95%" stopColor="var(--color-cost)" stopOpacity={0.01} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={isCompactViewport ? 4 : 8}
+                      tick={{ fontSize: isCompactViewport ? 10 : 12 }}
+                      minTickGap={isCompactViewport ? 20 : 8}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={4}
+                      {...compactAxisProps}
+                      tickFormatter={(value) => formatCompactAxisValue(Number(value), '¥')}
+                    />
                     <ChartTooltip
+                      cursor={false}
                       content={
                         <ChartTooltipContent
+                          indicator="dot"
+                          labelFormatter={(value) => String(value)}
                           formatter={(value, name) => (
                             <div className="flex min-w-32 items-center justify-between gap-4">
                               <span className="text-muted-foreground">{chartConfig[String(name)]?.label ?? String(name)}</span>
@@ -177,13 +230,81 @@ export default function Overview() {
                         />
                       }
                     />
-                    <Line type="monotone" dataKey="revenue" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-                    <Line type="monotone" dataKey="cost" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-                  </LineChart>
+                    <Area
+                      type="monotoneX"
+                      dataKey="revenue"
+                      stroke="var(--color-revenue)"
+                      strokeWidth={2}
+                      fill="url(#overviewRevenueFill)"
+                      dot={false}
+                      activeDot={{ r: 4, strokeWidth: 2 }}
+                      isAnimationActive={false}
+                    />
+                    <Area
+                      type="monotoneX"
+                      dataKey="cost"
+                      stroke="var(--color-cost)"
+                      strokeWidth={2}
+                      fill="url(#overviewCostFill)"
+                      dot={false}
+                      activeDot={{ r: 4, strokeWidth: 2 }}
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
                 </ChartContainer>
               </div>
             </PageSurface>
 
+            <PageSurface title="每日营收" description="柱状图用于强调单日规模,限制柱宽并使用渐变填充。">
+              <div className="h-[300px] min-w-0">
+                <ChartContainer config={chartConfig} className="h-full w-full">
+                  <BarChart accessibilityLayer data={data.trend} margin={chartMargin}>
+                    <defs>
+                      <linearGradient id="overviewRevenueBarFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--color-revenue)" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="var(--color-revenue)" stopOpacity={0.42} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={isCompactViewport ? 4 : 8}
+                      tick={{ fontSize: isCompactViewport ? 10 : 12 }}
+                      minTickGap={isCompactViewport ? 20 : 8}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={4}
+                      {...compactAxisProps}
+                      tickFormatter={(value) => formatCompactAxisValue(Number(value), '¥')}
+                    />
+                    <ChartTooltip
+                      cursor={false}
+                      content={
+                        <ChartTooltipContent
+                          indicator="dot"
+                          labelFormatter={(value) => String(value)}
+                          formatter={(value) => formatCurrency(Number(value || 0))}
+                        />
+                      }
+                    />
+                    <Bar
+                      dataKey="revenue"
+                      fill="url(#overviewRevenueBarFill)"
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={36}
+                      isAnimationActive={false}
+                    />
+                  </BarChart>
+                </ChartContainer>
+              </div>
+            </PageSurface>
+          </div>
+
+          <div className="grid gap-4">
             <PageSurface
               title="最近活动"
               description="表格页范本:搜索 + 筛选栏 + 空态 + 分页。"
