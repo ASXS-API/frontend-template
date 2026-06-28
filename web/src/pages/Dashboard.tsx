@@ -209,24 +209,21 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="scrollbar-none flex-1 overflow-y-auto">
             <header className="dashboard-header sticky top-0 z-10 flex h-16 items-center gap-3 border-b bg-background px-4 md:px-6">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentPage}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ type: 'spring', bounce: 0.15, duration: 0.35 }}
-                  className="flex min-w-0 flex-1 items-center gap-3"
-                >
-                  {isMobileViewport ? (
-                    <Button variant="outline" size="icon" className="h-9 w-9 md:hidden" onClick={() => setMobileNavOpen(true)}>
-                      <PanelLeft className="h-4 w-4" />
-                    </Button>
-                  ) : null}
-                  <CurrentIcon className="h-5 w-5 text-primary" />
-                  <h2 className="truncate text-base font-semibold md:text-lg">{currentItem.label}</h2>
-                </motion.div>
-              </AnimatePresence>
+              <motion.div
+                key={currentPage}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: 'spring', bounce: 0.15, duration: 0.35 }}
+                className="flex min-w-0 flex-1 items-center gap-3"
+              >
+                {isMobileViewport ? (
+                  <Button variant="outline" size="icon" className="h-9 w-9 md:hidden" onClick={() => setMobileNavOpen(true)}>
+                    <PanelLeft className="h-4 w-4" />
+                  </Button>
+                ) : null}
+                <CurrentIcon className="h-5 w-5 text-primary" />
+                <h2 className="truncate text-base font-semibold md:text-lg">{currentItem.label}</h2>
+              </motion.div>
 
               <div className="ml-auto flex min-w-0 items-center gap-2">
                 <ThemeToggleButton compact={isMobileViewport} showLabel={!isMobileViewport} />
@@ -240,18 +237,15 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             <main className="p-4 md:p-6">
               <ChunkLoadBoundary scopeLabel={currentItem.label}>
                 <Suspense fallback={<PageLoader />}>
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={currentPage}
-                      initial={{ opacity: 0, y: 20, scale: 0.99 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -12, scale: 0.99 }}
-                      transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-                    >
-                      {currentPage === 'overview' ? <Overview /> : null}
-                      {currentPage === 'settings' ? <SettingsPage /> : null}
-                    </motion.div>
-                  </AnimatePresence>
+                  <motion.div
+                    key={currentPage}
+                    initial={{ opacity: 0, y: 20, scale: 0.99 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+                  >
+                    {currentPage === 'overview' ? <Overview /> : null}
+                    {currentPage === 'settings' ? <SettingsPage /> : null}
+                  </motion.div>
                 </Suspense>
               </ChunkLoadBoundary>
             </main>
