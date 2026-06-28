@@ -31,7 +31,7 @@ npm run lint
 | 层 | 文件 | 派生时 |
 |----|------|--------|
 | 设计系统 | `src/index.css`(`ops-*` 类 + 主题 token)、`tailwind.config.js` | 改色板,基本不动结构 |
-| UI 原子 | `src/components/ui/*`(shadcn) | 不动;要加组件用 shadcn 同款方式 |
+| UI 原子/模板组件 | `src/components/ui/*`(shadcn + 模板组合组件) | 优先复用,要加组件用 shadcn 同款方式 |
 | 布局骨架 | `src/components/layout/*`、`pages/Dashboard.tsx` 外壳 | 改导航项,不改结构 |
 | 跨切面基建 | `theme` `i18n` `font-load-coordinator` `ChunkLoadBoundary` `global-toast` `lib/*` | 不动 |
 | API 层 | `src/api/client.ts`、`src/api/auth.ts` | 按后端调整,模式不变 |
@@ -75,6 +75,31 @@ const { data, loading, error, refresh } = useResource(() => getOverview(range), 
 `i18n/` 目前是单语言(zh-CN)直通实现,但 `datetime-picker`、`global-toast` 已通过它取文案。
 要做多语言时只扩 `i18n/`,不用改调用点。
 
+### 9. 高风险确认操作不用浏览器原生弹窗
+删除、覆盖保存、恢复默认等动作统一用 `useConfirm()`。它基于 Radix AlertDialog,会处理焦点、键盘与可访问性。
+
+```ts
+const confirm = useConfirm()
+const ok = await confirm({
+  title: '删除项目',
+  description: '删除后不可恢复。',
+  confirmText: '删除',
+  variant: 'destructive',
+})
+```
+
+### 10. 选择器优先用模板组合组件
+短枚举可以用 `Select`;需要搜索时用 `Combobox`;需要多选时用 `MultiSelect`。不要在业务页里重复拼 `Popover + Command`。
+
+```tsx
+<Combobox options={teamOptions} value={team} onValueChange={setTeam} />
+<MultiSelect options={featureOptions} value={features} onValueChange={setFeatures} />
+```
+
+### 11. 空态、错误态、分页和表单行用统一组件
+列表空态用 `EmptyState`,加载失败用 `ErrorState`,表格分页用 `Pagination`,表单布局用 `FormSection` / `FormField`。
+这些组件保证间距、字号、按钮位置一致,业务页只传文案和回调。
+
 ---
 
 ## 加一个新页面(checklist)
@@ -82,7 +107,8 @@ const { data, loading, error, refresh } = useResource(() => getOverview(range), 
 1. `src/api/<feature>.ts`:用 `apiRequest` 写类型化的数据函数。
 2. `src/pages/<Name>.tsx`:用 `PageShell` + `PageSurface` 搭壳,数据用 `useResource`,照抄 `Overview.tsx` 结构。
 3. `src/pages/Dashboard.tsx`:在 `navItems` 加一项,在 `lazy()` 区和 `<main>` 的条件渲染里各加一行。
-4. `npm run lint && npm run build` 应全绿。
+4. 表单页优先用 `FormField` + `Combobox` / `MultiSelect`;危险操作用 `useConfirm`,不要用 `window.confirm()`。
+5. `npm run lint && npm run build` 应全绿。
 
 > 「带选项卡的设置类页面」另有范本:`pages/Settings.tsx` + `TabbedSettingsPage`。
 
