@@ -1,13 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowDownRight, ArrowUpRight, RefreshCw } from 'lucide-react'
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 
 import { getOverview, type ActivityRow, type OverviewRange } from '@/api/demo'
 import { InlineLoader } from '@/components/PageLoader'
+import { DataTableToolbar } from '@/components/layout/DataTableToolbar'
+import { FilterBar, FilterField } from '@/components/layout/FilterBar'
 import { PageShell, PageStat, PageStatStrip, PageSurface } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import { Combobox } from '@/components/ui/combobox'
+import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
+import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorState } from '@/components/ui/error-state'
+import { Pagination } from '@/components/ui/pagination'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatCurrency, formatNumber } from '@/lib/formatters'
 import { motion, staggerContainer, staggerItem } from '@/lib/motion'
@@ -40,11 +47,53 @@ const STATUS_META: Record<ActivityRow['status'], { label: string; tone: string }
   failed: { label: '失败', tone: 'border-destructive/35 bg-destructive/10 text-destructive' },
 }
 
+type ActivityStatusFilter = 'all' | ActivityRow['status']
+
+const STATUS_OPTIONS: Array<{ value: ActivityStatusFilter; label: string; description?: string }> = [
+  { value: 'all', label: '全部状态' },
+  { value: 'active', label: STATUS_META.active.label, description: '当前进展正常' },
+  { value: 'pending', label: STATUS_META.pending.label, description: '需要人工跟进' },
+  { value: 'failed', label: STATUS_META.failed.label, description: '处理失败或异常' },
+]
+
+const ACTIVITY_PAGE_SIZE = 3
+
 export default function Overview() {
   const [range, setRange] = useState<OverviewRange>('7d')
+  const [activitySearch, setActivitySearch] = useState('')
+  const [activityStatus, setActivityStatus] = useState<ActivityStatusFilter>('all')
+  const [activityDateRange, setActivityDateRange] = useState<DateRangeValue>({ from: '', to: '' })
+  const [activityPage, setActivityPage] = useState(1)
   const { data, loading, error, refresh } = useResource(() => getOverview(range), [range])
 
   const deltaUp = (data?.revenueDelta ?? 0) >= 0
+  const filteredRows = useMemo(() => {
+    const keyword = activitySearch.trim().toLocaleLowerCase('zh-CN')
+    return (data?.rows ?? []).filter((row) => {
+      if (activityStatus !== 'all' && row.status !== activityStatus) return false
+
+      const rowDate = row.updatedAt.slice(0, 10)
+      if (activityDateRange.from && rowDate < activityDateRange.from) return false
+      if (activityDateRange.to && rowDate > activityDateRange.to) return false
+
+      if (!keyword) return true
+      return [row.id, row.name, row.channel, STATUS_META[row.status].label]
+        .join(' ')
+        .toLocaleLowerCase('zh-CN')
+        .includes(keyword)
+    })
+  }, [activityDateRange.from, activityDateRange.to, activitySearch, activityStatus, data?.rows])
+  const visibleRows = filteredRows.slice((activityPage - 1) * ACTIVITY_PAGE_SIZE, activityPage * ACTIVITY_PAGE_SIZE)
+
+  useEffect(() => {
+    setActivityPage(1)
+  }, [activityDateRange.from, activityDateRange.to, activitySearch, activityStatus, range])
+
+  const resetActivityFilters = () => {
+    setActivitySearch('')
+    setActivityStatus('all')
+    setActivityDateRange({ from: '', to: '' })
+  }
 
   return (
     <PageShell
@@ -76,12 +125,7 @@ export default function Overview() {
     >
       {error ? (
         <PageSurface>
-          <div className="flex flex-col items-center gap-3 py-10 text-center">
-            <p className="text-sm text-destructive">{error}</p>
-            <Button type="button" variant="outline" size="sm" onClick={refresh}>
-              重试
-            </Button>
-          </div>
+          <ErrorState message={error} onRetry={refresh} />
         </PageSurface>
       ) : loading && !data ? (
         <div className="flex h-64 items-center justify-center">
@@ -140,7 +184,40 @@ export default function Overview() {
               </div>
             </PageSurface>
 
-            <PageSurface title="最近活动" bodyClassName="p-0">
+            <PageSurface
+              title="最近活动"
+              description="表格页范本:搜索 + 筛选栏 + 空态 + 分页。"
+              bodyClassName="p-0"
+              footer={
+                <Pagination
+                  page={activityPage}
+                  pageSize={ACTIVITY_PAGE_SIZE}
+                  total={filteredRows.length}
+                  onPageChange={setActivityPage}
+                  className="w-full"
+                />
+              }
+            >
+              <DataTableToolbar
+                searchValue={activitySearch}
+                onSearchChange={setActivitySearch}
+                searchPlaceholder="搜索客户、渠道、状态..."
+                filters={
+                  <FilterBar onReset={resetActivityFilters} className="w-full border-0 bg-transparent p-0">
+                    <FilterField label="状态">
+                      <Combobox
+                        options={STATUS_OPTIONS}
+                        value={activityStatus}
+                        onValueChange={(nextValue) => setActivityStatus(nextValue as ActivityStatusFilter)}
+                        searchPlaceholder="搜索状态..."
+                      />
+                    </FilterField>
+                    <FilterField label="更新时间">
+                      <DateRangePicker value={activityDateRange} onChange={setActivityDateRange} />
+                    </FilterField>
+                  </FilterBar>
+                }
+              />
               <div className="ops-table-shell border-0">
                 <Table>
                   <TableHeader>
@@ -151,21 +228,29 @@ export default function Overview() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.rows.map((row) => {
-                      const meta = STATUS_META[row.status]
-                      return (
-                        <TableRow key={row.id}>
-                          <TableCell>
-                            <div className="font-medium">{row.name}</div>
-                            <div className="text-xs text-muted-foreground">{row.channel} · {row.updatedAt}</div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={cn('text-[11px]', meta.tone)}>{meta.label}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-mono">{formatCurrency(row.amount)}</TableCell>
-                        </TableRow>
-                      )
-                    })}
+                    {visibleRows.length ? (
+                      visibleRows.map((row) => {
+                        const meta = STATUS_META[row.status]
+                        return (
+                          <TableRow key={row.id}>
+                            <TableCell>
+                              <div className="font-medium">{row.name}</div>
+                              <div className="text-xs text-muted-foreground">{row.channel} · {row.updatedAt}</div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={cn('text-[11px]', meta.tone)}>{meta.label}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-mono">{formatCurrency(row.amount)}</TableCell>
+                          </TableRow>
+                        )
+                      })
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={3}>
+                          <EmptyState title="没有匹配活动" description="调整关键词、状态或日期范围后再试。" />
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </div>

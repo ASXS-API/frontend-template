@@ -89,14 +89,16 @@ const ok = await confirm({
 ```
 
 ### 10. 选择器优先用模板组合组件
-短枚举可以用 `Select`;需要搜索时用 `Combobox`;需要多选时用 `MultiSelect`。不要在业务页里重复拼 `Popover + Command`。
+短枚举可以用 `Select`;需要搜索时用 `Combobox`;需要多选时用 `MultiSelect`;需要远程搜索时用 `AsyncCombobox`。
+不要在业务页里重复拼 `Popover + Command`。
 
 ```tsx
 <Combobox options={teamOptions} value={team} onValueChange={setTeam} />
 <MultiSelect options={featureOptions} value={features} onValueChange={setFeatures} />
 ```
 
-### 11. 空态、错误态、分页和表单行用统一组件
+### 11. 筛选栏、空态、错误态、分页和表单行用统一组件
+表格筛选用 `DataTableToolbar` + `FilterBar` + `FilterField`,日期范围用 `DateRangePicker`。
 列表空态用 `EmptyState`,加载失败用 `ErrorState`,表格分页用 `Pagination`,表单布局用 `FormSection` / `FormField`。
 这些组件保证间距、字号、按钮位置一致,业务页只传文案和回调。
 
@@ -107,8 +109,9 @@ const ok = await confirm({
 1. `src/api/<feature>.ts`:用 `apiRequest` 写类型化的数据函数。
 2. `src/pages/<Name>.tsx`:用 `PageShell` + `PageSurface` 搭壳,数据用 `useResource`,照抄 `Overview.tsx` 结构。
 3. `src/pages/Dashboard.tsx`:在 `navItems` 加一项,在 `lazy()` 区和 `<main>` 的条件渲染里各加一行。
-4. 表单页优先用 `FormField` + `Combobox` / `MultiSelect`;危险操作用 `useConfirm`,不要用 `window.confirm()`。
-5. `npm run lint && npm run build` 应全绿。
+4. 表格页优先用 `DataTableToolbar` / `FilterBar` / `Pagination`;表单页优先用 `FormField` + `Combobox` / `MultiSelect`。
+5. 危险操作用 `useConfirm`,不要用 `window.confirm()`。
+6. `npm run lint && npm run build` 应全绿。
 
 > 「带选项卡的设置类页面」另有范本:`pages/Settings.tsx` + `TabbedSettingsPage`。
 
