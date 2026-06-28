@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { nsKey } from '@/config'
 import { FontLoadCoordinator } from '@/components/font-load-coordinator'
 import { ThemeProvider } from '@/components/theme'
+import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog'
 import { GlobalToastProvider } from '@/components/ui/global-toast'
 import { I18nProvider } from '@/i18n'
 import { installBrowserErrorLogging, logError, logWarn } from '@/lib/logger'
@@ -47,8 +48,10 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <I18nProvider>
         <GlobalToastProvider>
-          <FontLoadCoordinator />
-          <App />
+          <ConfirmDialogProvider>
+            <FontLoadCoordinator />
+            <App />
+          </ConfirmDialogProvider>
         </GlobalToastProvider>
       </I18nProvider>
     </ThemeProvider>
