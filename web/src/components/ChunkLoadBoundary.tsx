@@ -32,6 +32,12 @@ export class ChunkLoadBoundary extends Component<Props, State> {
     })
   }
 
+  componentDidUpdate(prevProps: Props) {
+    if (this.state.hasError && prevProps.scopeLabel !== this.props.scopeLabel) {
+      this.setState({ hasError: false })
+    }
+  }
+
   render() {
     if (!this.state.hasError) return this.props.children
 
